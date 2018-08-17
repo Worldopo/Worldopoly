@@ -314,7 +314,7 @@ contract CrowdsaleWPTByRounds is Ownable {
    * @dev Change minimal amount of investment.
    */
   function changeMinInvest(uint256 newMinValue) public onlyOwner {
-    rate = newRate;
+    rate = newMinValue;
   }
 
    /**
