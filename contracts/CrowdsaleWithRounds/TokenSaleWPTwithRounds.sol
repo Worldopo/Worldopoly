@@ -190,6 +190,8 @@ contract ERC20 {
     uint256 value
   );
 }
+
+
 /**
  * @title CrowdsaleWPTByRounds
  * @dev This is an example of a fully fledged crowdsale.
@@ -216,6 +218,9 @@ contract CrowdsaleWPTByRounds is Ownable {
   // Address where funds are collected
   address public wallet;
 
+  // Address of tokens minter
+  CommonSale public minterContract = CommonSale(0xeA9cbceD36a092C596e9c18313536D0EEFacff46);
+
   // How many token units a buyer gets per wei.
   // The rate is the conversion between wei and the smallest and indivisible token unit.
   uint256 public rate;
@@ -229,6 +234,9 @@ contract CrowdsaleWPTByRounds is Ownable {
   // Time ranges for current round
   uint256 public openingTime;
   uint256 public closingTime;
+
+  //Minimal value of investment
+  uint public minInvestmentValue;
 
   /**
    * @dev Reverts if not in crowdsale time range.
@@ -276,6 +284,8 @@ contract CrowdsaleWPTByRounds is Ownable {
     cap = _cap;
     openingTime = _openingTime;
     closingTime = _closingTime;
+
+    minInvestmentValue = 0.02 ether;
   }
 
    /**
@@ -290,6 +300,20 @@ contract CrowdsaleWPTByRounds is Ownable {
    * @dev Correction of current rate.
    */
   function changeRate(uint256 newRate) public onlyOwner {
+    rate = newRate;
+  }
+
+   /**
+   * @dev Close current round.
+   */
+  function closeRound() public onlyOwner {
+    closingTime = block.timestamp + 1;
+  }
+
+   /**
+   * @dev Change minimal amount of investment.
+   */
+  function changeMinInvest(uint256 newMinValue) public onlyOwner {
     rate = newRate;
   }
 
@@ -350,7 +374,8 @@ contract CrowdsaleWPTByRounds is Ownable {
     // update state
     weiRaised = weiRaised.add(weiAmount);
 
-    _processPurchase(_beneficiary, tokens);
+    minterContract.mintTokensExternal(_beneficiary, tokens);
+    //_processPurchase(_beneficiary, tokens);
     emit TokenPurchase(
       msg.sender,
       _beneficiary,
@@ -372,7 +397,7 @@ contract CrowdsaleWPTByRounds is Ownable {
   onlyWhileOpen
   {
     require(_beneficiary != address(0));
-    require(_weiAmount != 0);
+    require(_weiAmount != 0 && _weiAmount > minInvestmentValue);
     require(weiRaised.add(_weiAmount) <= cap);
   }
 
@@ -410,17 +435,3 @@ contract CrowdsaleWPTByRounds is Ownable {
     wallet.transfer(msg.value);
   }
 }
-
-/*
-account_1 0xb3da7EFF2bDB39ac44f5A512918d7C6d36D7eA05
-account_2 0xd1e966B8A424AD628Ae556b8ACF0B2B5E34DeD92
-account_3 0x6aE17cF102dbFDBbE068137b1932aa575cAD2f2B
-token 0x66915eF27b4D4bc9168a6De7dc255f3e6B33Ba3b
-1534510000
-
-1534518570 192
-1534518670 192
-
-1534510000000
-
-*/
