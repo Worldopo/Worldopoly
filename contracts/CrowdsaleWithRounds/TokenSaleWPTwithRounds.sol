@@ -191,7 +191,15 @@ contract ERC20 {
   );
 }
 
+contract AddressesFilterFeature is Ownable {}
+contract ERC20Basic {}
+contract BasicToken is ERC20Basic {}
+contract StandardToken is ERC20, BasicToken {}
+contract MintableToken is AddressesFilterFeature, StandardToken {}
 
+contract Token is MintableToken {
+      function mint(address, uint256) public returns (bool);
+}
 /**
  * @title CrowdsaleWPTByRounds
  * @dev This is an example of a fully fledged crowdsale.
@@ -219,14 +227,14 @@ contract CrowdsaleWPTByRounds is Ownable {
   address public wallet;
 
   // Address of tokens minter
-  CommonSale public minterContract = CommonSale(0xeA9cbceD36a092C596e9c18313536D0EEFacff46);
+  Token public minterContract;
 
   // How many token units a buyer gets per wei.
   // The rate is the conversion between wei and the smallest and indivisible token unit.
   uint256 public rate;
 
-  // Amount of wei raised
-  uint256 public weiRaised;
+  // Amount of tokens raised
+  uint256 public tokensRaised;
 
   // Cap for current round
   uint256 public cap;
@@ -237,6 +245,14 @@ contract CrowdsaleWPTByRounds is Ownable {
 
   //Minimal value of investment
   uint public minInvestmentValue;
+
+  /**
+   * @dev Allows the owner to set the minter contract.
+   * @param _minterAddr the minter address
+   */
+  function setMinter(address _minterAddr) public onlyOwner {
+    minterContract = Token(_minterAddr);
+  }
 
   /**
    * @dev Reverts if not in crowdsale time range.
@@ -261,29 +277,12 @@ contract CrowdsaleWPTByRounds is Ownable {
     uint256 amount
     );
 
-  /**
-   * @param _rate Number of token units a buyer gets per wei
-   * @param _wallet Address where collected funds will be forwarded to
-   * @param _token Address of the token being sold
-   * @param _cap Max amount of wei to be contributed
-   * @param _openingTime Crowdsale opening time
-   * @param _closingTime Crowdsale closing time
-   */
-  constructor(uint256 _rate, address _wallet, ERC20 _token, uint256 _cap, uint256 _openingTime, uint256 _closingTime) public {
-    require(_rate > 0);
-    require(_wallet != address(0));
-    require(_token != address(0));
-    require(_cap > 0);
-    // solium-disable-next-line security/no-block-members
-    require(_openingTime >= block.timestamp);
-    require(_closingTime >= _openingTime);
-
-    rate = _rate;
-    wallet = _wallet;
-    token = _token;
-    cap = _cap;
-    openingTime = _openingTime;
-    closingTime = _closingTime;
+constructor () public {
+    rate = 400;
+    wallet = 0xeA9cbceD36a092C596e9c18313536D0EEFacff46;
+    cap = 400000000000000000000000;
+    openingTime = 1534558186;
+    closingTime = 1535320800;
 
     minInvestmentValue = 0.02 ether;
   }
@@ -293,7 +292,7 @@ contract CrowdsaleWPTByRounds is Ownable {
    * @return Whether the cap was reached
    */
   function capReached() public view returns (bool) {
-    return weiRaised >= cap;
+    return tokensRaised >= cap;
   }
 
    /**
@@ -311,6 +310,20 @@ contract CrowdsaleWPTByRounds is Ownable {
   }
 
    /**
+   * @dev Set token address.
+   */
+  function setToken(ERC20 _token) public onlyOwner {
+    token = _token;
+  }
+
+   /**
+   * @dev Set address od deposit wallet.
+   */
+  function setWallet(address _wallet) public onlyOwner {
+    wallet = _wallet;
+  }
+
+   /**
    * @dev Change minimal amount of investment.
    */
   function changeMinInvest(uint256 newMinValue) public onlyOwner {
@@ -318,9 +331,16 @@ contract CrowdsaleWPTByRounds is Ownable {
   }
 
    /**
+   * @dev Set cap for current round.
+   */
+  function setCap(uint256 _newCap) public onlyOwner {
+    cap = _newCap;
+  }
+
+   /**
    * @dev Start new crowdsale round if already not started.
    */
-  function startNewRound(uint256 _rate, address _wallet, ERC20 _token, uint256 _cap, uint256 _openingTime, uint256 _closingTime) public onlyOwner {
+  function startNewRound(uint256 _rate, address _wallet, ERC20 _token, uint256 _cap, uint256 _openingTime, uint256 _closingTime) payable public onlyOwner {
     require(!hasOpened());
     rate = _rate;
     wallet = _wallet;
@@ -355,7 +375,7 @@ contract CrowdsaleWPTByRounds is Ownable {
   /**
    * @dev fallback function ***DO NOT OVERRIDE***
    */
-  function () external payable {
+  function () payable external {
     buyTokens(msg.sender);
   }
 
@@ -363,7 +383,7 @@ contract CrowdsaleWPTByRounds is Ownable {
    * @dev low level token purchase ***DO NOT OVERRIDE***
    * @param _beneficiary Address performing the token purchase
    */
-  function buyTokens(address _beneficiary) public payable {
+  function buyTokens(address _beneficiary) payable public{
 
     uint256 weiAmount = msg.value;
     _preValidatePurchase(_beneficiary, weiAmount);
@@ -372,10 +392,10 @@ contract CrowdsaleWPTByRounds is Ownable {
     uint256 tokens = _getTokenAmount(weiAmount);
 
     // update state
-    weiRaised = weiRaised.add(weiAmount);
+    tokensRaised = tokensRaised.add(tokens);
 
-    minterContract.mintTokensExternal(_beneficiary, tokens);
-    //_processPurchase(_beneficiary, tokens);
+    minterContract.mint(_beneficiary, tokens);
+    
     emit TokenPurchase(
       msg.sender,
       _beneficiary,
@@ -389,7 +409,7 @@ contract CrowdsaleWPTByRounds is Ownable {
   /**
    * @dev Extend parent behavior requiring purchase to respect the funding cap.
    * @param _beneficiary Token purchaser
-   * @param _weiAmount Amount of wei contributed
+   *  _weiAmount Amount of wei contributed
    */
   function _preValidatePurchase(address _beneficiary, uint256 _weiAmount)
   internal
@@ -398,7 +418,7 @@ contract CrowdsaleWPTByRounds is Ownable {
   {
     require(_beneficiary != address(0));
     require(_weiAmount != 0 && _weiAmount > minInvestmentValue);
-    require(weiRaised.add(_weiAmount) <= cap);
+    require(tokensRaised.add(_getTokenAmount(_weiAmount)) <= cap);
   }
 
   /**
