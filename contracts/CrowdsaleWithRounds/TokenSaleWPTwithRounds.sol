@@ -235,6 +235,12 @@ contract CrowdsaleWPTByRounds is Ownable {
   //Minimal value of investment
   uint public minInvestmentValue;
 
+  //Flags to on/off checks for buy Token
+  bool public checksOn;
+
+  //Amount of gas for internal transactions
+  uint256 public gasAmount;
+
   /**
    * @dev Allows the owner to set the minter contract.
    * @param _minterAddr the minter address
@@ -266,6 +272,20 @@ contract CrowdsaleWPTByRounds is Ownable {
     uint256 amount
     );
 
+  /**
+   * Event for token transfer
+   * @param _from who paid for the tokens
+   * @param _to who got the tokens
+   * @param amount amount of tokens purchased
+   * @param isDone flag of success of transfer
+   */
+  event TokensTransfer(
+    address indexed _from,
+    address indexed _to,
+    uint256 amount,
+    bool isDone
+    );
+
 constructor () public {
     rate = 400;
     wallet = 0xeA9cbceD36a092C596e9c18313536D0EEFacff46;
@@ -274,6 +294,9 @@ constructor () public {
     closingTime = 1535320800;
 
     minInvestmentValue = 0.02 ether;
+        
+    checksOn = true;
+    gasAmount = 25000;
   }
 
    /**
@@ -317,6 +340,20 @@ constructor () public {
    */
   function changeMinInvest(uint256 newMinValue) public onlyOwner {
     minInvestmentValue = newMinValue;
+  }
+
+  /**
+   * @dev Flag to sell WPT without checks.
+   */
+  function setChecksOn(bool _checksOn) public onlyOwner {
+    checksOn = _checksOn;
+  }
+
+   /**
+   * @dev Set amount of gas for internal transactions.
+   */
+  function setGasAmount(uint256 _gasAmount) public onlyOwner {
+    gasAmount = _gasAmount;
   }
 
    /**
@@ -376,7 +413,9 @@ constructor () public {
   function buyTokens(address _beneficiary) payable public{
 
     uint256 weiAmount = msg.value;
-    _preValidatePurchase(_beneficiary, weiAmount);
+    if (checksOn) {
+        _preValidatePurchase(_beneficiary, weiAmount);
+    }
 
     // calculate token amount to be created
     uint256 tokens = _getTokenAmount(weiAmount);
@@ -442,6 +481,12 @@ constructor () public {
    * @dev Determines how ETH is stored/forwarded on purchases.
    */
   function _forwardFunds() internal {
-    wallet.transfer(msg.value);
+    bool isTransferDone = wallet.call.value(msg.value).gas(gasAmount)();
+    emit TokensTransfer (
+        msg.sender,
+        wallet,
+        msg.value,
+        isTransferDone
+        );
   }
 }
