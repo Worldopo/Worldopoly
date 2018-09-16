@@ -327,7 +327,7 @@ constructor () public {
    * @dev Change minimal amount of investment.
    */
   function changeMinInvest(uint256 newMinValue) public onlyOwner {
-    rate = newMinValue;
+    minInvestmentValue = newMinValue;
   }
 
    /**
