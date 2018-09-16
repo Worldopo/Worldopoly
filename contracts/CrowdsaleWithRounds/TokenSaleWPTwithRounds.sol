@@ -348,6 +348,7 @@ constructor () public {
     cap = _cap;
     openingTime = _openingTime;
     closingTime = _closingTime;
+    tokensRaised = 0;
   }
 
   /**
