@@ -200,10 +200,298 @@ contract MintableToken is AddressesFilterFeature, StandardToken {}
 contract Token is MintableToken {
       function mint(address, uint256) public returns (bool);
 }
+
+
 /**
- * @title CrowdsaleWPTByRounds
+ * @title CrowdsaleWPTByAuction
  * @dev This is a fully fledged crowdsale.
 */
+
+contract CrowdsaleWPTByAuction is Ownable {
+  using SafeMath for uint256;
+  using SafeERC20 for ERC20;
+
+  // The token being sold
+  ERC20 public token;
+
+  // Address where funds are collected
+  address public wallet;
+
+  // Address of tokens minter
+  Token public minterContract;
+
+  // Amount of invested ETH
+  uint256 public ethRaised;
+
+  // Array of investors and the amount of their investments
+  mapping (address => uint256) private _balances;
+
+  // Array of investors
+  address[] public beneficiaryAddresses;
+
+  // Cap for current round
+  uint256 public cap;
+
+  // BonusCap for current round
+  uint256 public bonusCap;
+
+  // Time ranges for current round
+  uint256 public openingTime;
+  uint256 public closingTime;
+
+  //Minimal value of investment
+  uint public minInvestmentValue;
+
+  //Flags to on/off checks for buy Token
+  bool public checksOn;
+
+  //Amount of gas for internal transactions
+  uint256 public gasAmount;
+
+  /**
+   * @dev Allows the owner to set the minter contract.
+   * @param _minterAddr the minter address
+   */
+  function setMinter(address _minterAddr) public onlyOwner {
+    minterContract = Token(_minterAddr);
+  }
+
+  /**
+   * @dev Reverts if not in crowdsale time range.
+   */
+  modifier onlyWhileOpen {
+    // solium-disable-next-line security/no-block-members
+    require(block.timestamp >= openingTime && block.timestamp <= closingTime);
+    _;
+  }
+
+  /**
+  * @dev Gets the balance of the specified address.
+  * @param owner The address to query the balance of.
+  * @return An uint256 representing the amount owned by the passed address.
+  */
+  function balanceOf(address owner) public view returns (uint256) {
+    return _balances[owner];
+  }
+
+  /**
+   * Event for token purchase logging
+   * @param purchaser who paid for the tokens
+   * @param beneficiary who got the tokens
+   * @param value weis paid for purchase
+   * @param amount amount of tokens purchased
+   */
+  event TokenPurchase(
+    address indexed purchaser,
+    address indexed beneficiary,
+    uint256 value,
+    uint256 amount
+    );
+
+  /**
+   * Event for token transfer
+   * @param _from who paid for the tokens
+   * @param _to who got the tokens
+   * @param amount amount of tokens purchased
+   * @param isDone flag of success of transfer
+   */
+  event TokensTransfer(
+    address indexed _from,
+    address indexed _to,
+    uint256 amount,
+    bool isDone
+    );
+
+constructor () public {
+    wallet = 0xeA9cbceD36a092C596e9c18313536D0EEFacff46;
+    openingTime = 1537135200;
+    closingTime = 1538344800;
+    cap = 0;
+    bonusCap = 1000000000000000000000000; //1M WPT 
+    minInvestmentValue = 0.02 ether;
+    ethRaised = 0;
+        
+    checksOn = true;
+    gasAmount = 25000;
+  }
+
+   /**
+   * @dev Close current round.
+   */
+  function closeRound() public onlyOwner {
+    closingTime = block.timestamp + 1;
+  }
+
+   /**
+   * @dev Set token address.
+   */
+  function setToken(ERC20 _token) public onlyOwner {
+    token = _token;
+  }
+
+   /**
+   * @dev Set address od deposit wallet.
+   */
+  function setWallet(address _wallet) public onlyOwner {
+    wallet = _wallet;
+  }
+
+   /**
+   * @dev Change minimal amount of investment.
+   */
+  function changeMinInvest(uint256 newMinValue) public onlyOwner {
+    minInvestmentValue = newMinValue;
+  }
+
+  /**
+   * @dev Flag to sell WPT without checks.
+   */
+  function setChecksOn(bool _checksOn) public onlyOwner {
+    checksOn = _checksOn;
+  }
+
+   /**
+   * @dev Set amount of gas for internal transactions.
+   */
+  function setGasAmount(uint256 _gasAmount) public onlyOwner {
+    gasAmount = _gasAmount;
+  }
+  
+   /**
+   * @dev Set cap for current round.
+   */
+  function setCap(uint256 _newCap) public onlyOwner {
+    cap = _newCap;
+  }
+
+   /**
+   * @dev Set bonusCap for current round.
+   */
+  function setBonusCap(uint256 _newBonusCap) public onlyOwner {
+    bonusCap = _newBonusCap;
+  }
+
+   /**
+   * @dev Add new investor.
+   */
+  function addInvestor(address _beneficiary, uint8 amountOfinvestedEth) public onlyOwner {
+      _balances[_beneficiary] = amountOfinvestedEth;
+      beneficiaryAddresses.push(_beneficiary);
+  }
+
+  /**
+   * @dev Checks whether the period in which the crowdsale is open has already elapsed.
+   * @return Whether crowdsale period has elapsed
+   */
+  function hasClosed() public view returns (bool) {
+    // solium-disable-next-line security/no-block-members
+    return block.timestamp > closingTime;
+  }
+
+  /**
+   * @dev Checks whether the period in which the crowdsale is open.
+   * @return Whether crowdsale period has opened
+   */
+  function hasOpened() public view returns (bool) {
+    // solium-disable-next-line security/no-block-members
+    return (openingTime < block.timestamp && block.timestamp < closingTime);
+  }
+
+   /**
+   * @dev Start new crowdsale round with auction if already not started.
+   */
+  function startNewRound(address _wallet, ERC20 _token, uint256 _cap, uint256 _bonusCap, uint256 _openingTime, uint256 _closingTime) payable public onlyOwner {
+    require(!hasOpened());
+    wallet = _wallet;
+    token = _token;
+    cap = _cap;
+    bonusCap = _bonusCap;
+    openingTime = _openingTime;
+    closingTime = _closingTime;
+    ethRaised = 0;
+  }
+
+   /**
+   * @dev Pay all bonuses to all investors from last round
+   */
+  function payAllBonuses() payable public onlyOwner {
+    require(hasClosed());
+
+    uint256 allFunds = cap.add(bonusCap);
+    uint256 priceWPTperETH = allFunds.div(ethRaised);
+
+    uint beneficiaryCount = beneficiaryAddresses.length;
+    for (uint i = 0; i < beneficiaryCount; i++) {
+      minterContract.mint(beneficiaryAddresses[i], _balances[beneficiaryAddresses[i]].mul(priceWPTperETH));
+      delete _balances[beneficiaryAddresses[i]];
+    }
+
+    delete beneficiaryAddresses;
+    cap = 0;
+    bonusCap = 0;
+
+  }
+
+  // -----------------------------------------
+  // Crowdsale external interface
+  // -----------------------------------------
+
+  /**
+   * @dev fallback function ***DO NOT OVERRIDE***
+   */
+  function () payable external {
+    buyTokens(msg.sender);
+  }
+
+  /**
+   * @dev low level token purchase ***DO NOT OVERRIDE***
+   * @param _beneficiary Address performing the token purchase
+   */
+  function buyTokens(address _beneficiary) payable public{
+
+    uint256 weiAmount = msg.value;
+    if (checksOn) {
+        _preValidatePurchase(_beneficiary, weiAmount);
+    }
+
+    _balances[_beneficiary] = _balances[_beneficiary].add(weiAmount);
+    beneficiaryAddresses.push(_beneficiary);
+
+    // update state
+    ethRaised = ethRaised.add(weiAmount);
+
+    _forwardFunds();
+  }
+
+  /**
+   * @dev Extend parent behavior requiring purchase to respect the funding cap.
+   * @param _beneficiary Token purchaser
+   * @param _weiAmount Amount of wei contributed
+   */
+  function _preValidatePurchase(address _beneficiary, uint256 _weiAmount)
+  internal
+  view
+  onlyWhileOpen
+  {
+    require(_beneficiary != address(0));
+    require(_weiAmount != 0 && _weiAmount > minInvestmentValue);
+  }
+
+  /**
+   * @dev Determines how ETH is stored/forwarded on purchases.
+   */
+  function _forwardFunds() internal {
+    bool isTransferDone = wallet.call.value(msg.value).gas(gasAmount)();
+    emit TokensTransfer (
+        msg.sender,
+        wallet,
+        msg.value,
+        isTransferDone
+        );
+  }
+}
+
+//========================================================================
 
 contract CrowdsaleWPTByRounds is Ownable {
   using SafeMath for uint256;
@@ -438,7 +726,7 @@ constructor () public {
   /**
    * @dev Extend parent behavior requiring purchase to respect the funding cap.
    * @param _beneficiary Token purchaser
-   *  _weiAmount Amount of wei contributed
+   * @param _weiAmount Amount of wei contributed
    */
   function _preValidatePurchase(address _beneficiary, uint256 _weiAmount)
   internal
