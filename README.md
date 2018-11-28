@@ -1,4 +1,4 @@
-![Worldopo Token](Logo Big.png "Worldopoly Token")
+![Worldopo Token](logo.png "Worldopoly Token")
 
 # Worldopo Token smart contract
 
