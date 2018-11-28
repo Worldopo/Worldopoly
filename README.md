@@ -1,9 +1,9 @@
-![Worldopoly Token](logo.png "Worldopoly Token")
+![Worldopo Token](logo.png "Worldopoly Token")
 
-# Worldopoly Token smart contract
+# Worldopo Token smart contract
 
 * _Standard_                                                                            : [ERC20](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-20.md)
-* _[Name](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-20.md#name)_            : Worldopoly
+* _[Name](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-20.md#name)_            : Worldopo
 * _[Ticker](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-20.md#symbol)_        : WPT
 * _[Decimals](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-20.md#decimals)_    : 18
 * _Emission_                                                                            : Mintable
